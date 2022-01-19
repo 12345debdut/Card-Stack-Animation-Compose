@@ -20,10 +20,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -35,6 +32,7 @@ import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.IntOffset
@@ -42,7 +40,9 @@ import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import androidx.viewpager2.widget.ViewPager2
 import com.example.testapplication.views.CardStack
+import com.example.testapplication.views.rememberDragManager
 import com.google.accompanist.flowlayout.FlowRow
+import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
 
 
@@ -72,13 +72,29 @@ class FirstFragement : Fragment() {
         super.onViewCreated(view, savedInstanceState)
         val composeView = view.findViewById<ComposeView>(R.id.compose_view)
         composeView.setContent {
+            val list = mutableListOf(R.drawable.image1,R.drawable.image2,R.drawable.image3,R.drawable.image4,R.drawable.images5)
+            val config = LocalConfiguration.current
+            val screenWidth = with(LocalDensity.current) {
+                config.screenWidthDp.dp.toPx()
+            }
+            val manager = rememberDragManager(size = list.size, screenWidth = screenWidth, scope = rememberCoroutineScope(), maxElements = 3)
+            LaunchedEffect(key1 = Unit, block = {
+                for(i in 0 until list.size-1){
+                    delay(2000)
+                    manager.swipeLeft()
+                }
+                for(i in 0 until list.size){
+                    delay(2000)
+                    manager.swipeBack()
+                }
+            })
             Column(
                 modifier = Modifier.fillMaxSize(),
                 verticalArrangement = Arrangement.Bottom,
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 CardStack(
-                    items = mutableListOf(R.drawable.image1,R.drawable.image2,R.drawable.image3,R.drawable.image4,R.drawable.images5),
+                    items = list,
                     maxElements = 3,
                     content = {
                         Image(
@@ -91,7 +107,8 @@ class FirstFragement : Fragment() {
                         )
                     },
                     modifier = Modifier
-                        .fillMaxSize(fraction = 0.9f)
+                        .fillMaxSize(fraction = 0.9f),
+                    dragState = manager
                 )
             }
         }
