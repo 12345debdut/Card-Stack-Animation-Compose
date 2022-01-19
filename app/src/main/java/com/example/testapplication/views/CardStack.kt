@@ -81,12 +81,6 @@ fun <T> CardStack(
                             }
                         },
                         onDrag = { change, dragAmount ->
-                            val swipeState = dragManager.listOfDragState[selectedIndex.coerceIn(0,items.size-1)]
-                            val original = Offset(
-                                x = swipeState.offsetX.value,
-                                y = swipeState.offsetY.value
-                            )
-                            val summed = original + dragAmount
                             change.consumePositionChange()
                             if (dragAmount.x > 0 || selectedIndex == 0) {
                                 dragManager.dragRight(
@@ -94,11 +88,9 @@ fun <T> CardStack(
                                     dragAmount = dragAmount
                                 )
                             }else {
-                                dragManager.performDrag(
-                                    dragAmountY = summed.y,
-                                    dragAmountX = summed.x,
-                                    dragIndex = selectedIndex,
-                                    selectedIndex = selectedIndex
+                                dragManager.dragLeft(
+                                    index = selectedIndex,
+                                    dragAmount = dragAmount
                                 )
                             }
                         }
@@ -183,6 +175,8 @@ open class DragManager(
     var isAnimationRunning = false
         private set
 
+    private var currentlyDragging = -1
+
     /**
      * When the object initialize the object
      * */
@@ -257,7 +251,7 @@ open class DragManager(
      * @param dragIndex dragging index by the user
      * @param selectedIndex which one is currently top of the deck
      */
-    fun performDrag(dragAmountX: Float, dragAmountY: Float, dragIndex: Int, selectedIndex: Int) = scope.launch {
+    private fun performDrag(dragAmountX: Float, dragAmountY: Float, dragIndex: Int, selectedIndex: Int) = scope.launch {
         if (dragIndex != selectedIndex) return@launch
         if (dragAmountX > 0){
             return@launch
@@ -265,6 +259,7 @@ open class DragManager(
         Log.d("INDEX","DRAG INDEX: $dragIndex $dragAmountX")
 
         if(isAnimationRunning) return@launch
+        if(currentlyDragging != -1 && currentlyDragging != dragIndex) return@launch
         launch {
             //Only the top item should be removed from deck otherwise it will not respond
             val dragState = listOfDragState[dragIndex]
@@ -366,6 +361,19 @@ open class DragManager(
                 selectedIndex = prevItemIndex
             )
         }
+    }
+
+    /**
+     * It's the drag right gesture whenever user drags it left of the screen so that the last removed card should appear into the deck again
+     * @param index Index of the current selected item
+     * @param dragAmount Drag offset so that it will do the interpolation
+     */
+    fun dragLeft(index: Int,dragAmount: Offset) = scope.launch{
+        if(dragAmount.x > 0) return@launch
+        val item = listOfDragState[index]
+        val itemOffset = Offset(x = item.offsetX.value, y = item.offsetY.value)
+        val summed = itemOffset + dragAmount
+        performDrag(dragIndex = index, dragAmountY = summed.y, dragAmountX = summed.x, selectedIndex = index)
     }
 
     /**
