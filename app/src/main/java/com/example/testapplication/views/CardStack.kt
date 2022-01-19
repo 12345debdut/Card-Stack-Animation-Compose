@@ -51,6 +51,9 @@ fun <T> CardStack(
         config.screenWidthDp.dp.toPx()
     }
     val scope = rememberCoroutineScope()
+    LaunchedEffect(key1 = selectedIndex, block = {
+        Log.d("INDEX","SELECTED INDEX: $selectedIndex")
+    })
     val dragManager =
         rememberDragManager(
             size = items.size,
@@ -58,13 +61,6 @@ fun <T> CardStack(
             scope = scope,
             maxElements = maxElements
         )
-    LaunchedEffect(key1 = Unit, block = {
-        delay(2000)
-        dragManager.swipeLeft(selectedIndex){
-            selectedIndex-=it
-        }
-    })
-
     Column(
         modifier = modifier,
         verticalArrangement = Arrangement.Center,
@@ -80,24 +76,24 @@ fun <T> CardStack(
                                 index = selectedIndex,
                                 selectedIndex = selectedIndex
                             ) {
-                                selectedIndex = (selectedIndex - it).coerceIn(0, items.size - 1)
+                                Log.d("INDEX","DRAG END...$it")
+                                selectedIndex = (selectedIndex - it).coerceIn(-1, items.size - 1)
                             }
                         },
                         onDrag = { change, dragAmount ->
-                            val swipeState = dragManager.listOfDragState[selectedIndex]
+                            val swipeState = dragManager.listOfDragState[selectedIndex.coerceIn(0,items.size-1)]
                             val original = Offset(
                                 x = swipeState.offsetX.value,
                                 y = swipeState.offsetY.value
                             )
                             val summed = original + dragAmount
                             change.consumePositionChange()
-                            if (dragAmount.x > 0) {
+                            if (dragAmount.x > 0 || selectedIndex == 0) {
                                 dragManager.dragRight(
                                     index = selectedIndex,
                                     dragAmount = dragAmount
                                 )
-                            }
-                            scope.launch {
+                            }else {
                                 dragManager.performDrag(
                                     dragAmountY = summed.y,
                                     dragAmountX = summed.x,
@@ -187,8 +183,6 @@ open class DragManager(
     var isAnimationRunning = false
         private set
 
-    private var isSwipingRight = false
-
     /**
      * When the object initialize the object
      * */
@@ -268,8 +262,9 @@ open class DragManager(
         if (dragAmountX > 0){
             return@launch
         }
-        if(isAnimationRunning) return@launch
+        Log.d("INDEX","DRAG INDEX: $dragIndex $dragAmountX")
 
+        if(isAnimationRunning) return@launch
         launch {
             //Only the top item should be removed from deck otherwise it will not respond
             val dragState = listOfDragState[dragIndex]
@@ -303,6 +298,7 @@ open class DragManager(
     fun onDragEnd(index: Int, selectedIndex: Int, onDismiss: (Int) -> Unit) {
         if (index != selectedIndex) return
         val swipeState = listOfDragState[index]
+        Log.d("INDEX","SWIPE: ${swipeState.offsetX.targetValue} ${swipeState.offsetX.value}")
         when {
             swipeState.offsetX.targetValue >= 0 -> {
                 val prevIndex = (index + 1).coerceAtMost(size - 1)
@@ -318,7 +314,7 @@ open class DragManager(
                         }
                 }
             }
-            abs(swipeState.offsetX.targetValue) < screenWidth / 2 -> {
+            abs(swipeState.offsetX.targetValue) < boxWidth / 2 -> {
                 isAnimationRunning = true
                 swipeState
                     .positionToCenter() {
@@ -327,8 +323,10 @@ open class DragManager(
                         isAnimationRunning = false
                     }
             }
-            abs(swipeState.offsetX.targetValue) > 0 && abs(swipeState.offsetX.targetValue) > screenWidth/2 -> {
-                animateOutsideOfScreen(index = index, onDismiss = onDismiss)
+            abs(swipeState.offsetX.targetValue) > 0 && abs(swipeState.offsetX.targetValue) > boxWidth/2 -> {
+                animateOutsideOfScreen(index = index).invokeOnCompletion {
+                    onDismiss(1)
+                }
             }
         }
     }
@@ -353,10 +351,11 @@ open class DragManager(
      * @param dragAmount Drag offset so that it will do the interpolation
      */
     fun dragRight(index: Int, dragAmount: Offset) = scope.launch {
-        isSwipingRight = true
         if (dragAmount.x < 0) return@launch
+        Log.d("DRAG RIGHT","DRAG RIGHT: $index")
         val prevItemIndex = (index + 1).coerceAtMost(size - 1)
         if (prevItemIndex == index + 1) {
+            Log.d("DRAG RIGHT","DRAG RIGHT: here $index")
             val item = listOfDragState[prevItemIndex]
             val itemOffset = Offset(x = item.offsetX.value, y = item.offsetY.value)
             val summed = itemOffset + dragAmount
@@ -367,7 +366,6 @@ open class DragManager(
                 selectedIndex = prevItemIndex
             )
         }
-        isSwipingRight = false
     }
 
     /**
@@ -376,7 +374,10 @@ open class DragManager(
      * @param onDismiss It will be called after dismissal of the card
      */
     fun swipeLeft(index: Int,onDismiss: (Int) -> Unit = {}) = scope.launch {
-        animateOutsideOfScreen(index = index, onDismiss = onDismiss)
+        animateOutsideOfScreen(index = index)
+            .invokeOnCompletion {
+            onDismiss(1)
+        }
     }
 
     /**
@@ -384,7 +385,7 @@ open class DragManager(
      * @param index Index of the current swiped card
      * @param onDismiss After dismissal of the card if we need to manipulate some thing or not
      */
-    private fun animateOutsideOfScreen(index: Int,onDismiss: (Int) -> Unit) = scope.launch{
+    private fun animateOutsideOfScreen(index: Int) = scope.launch{
         val state = listOfDragState[index]
         state.animateOutsideOfScreen()
         isAnimationRunning = true
@@ -399,10 +400,9 @@ open class DragManager(
                             offsetXP = offsetX[maxCards - 1]
                         )
                     }
-                }.invokeOnCompletion {
-                    isAnimationRunning = false
-                    onDismiss(1)
                 }
+            }.invokeOnCompletion {
+                isAnimationRunning = false
             }
         }
     }
