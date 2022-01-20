@@ -1,6 +1,5 @@
 package com.example.testapplication.views
 
-import android.util.Log
 import androidx.compose.foundation.*
 import androidx.compose.foundation.gestures.*
 import androidx.compose.foundation.layout.*
@@ -33,6 +32,7 @@ import androidx.compose.ui.unit.Dp
  * @param verticalArrangement Vertical Arrangement to arrange the deck of cards
  * @param horizontalAlignment Horizontal alignment to align the deck of cards
  * @param content Content then needs to be placed into the container
+ * @param isDragEnable It will just enable the drag gesture or disable the drag gesture.
  * @author Debdut Saha
  */
 @ExperimentalMaterialApi
@@ -46,6 +46,7 @@ fun <T> CardStack(
     verticalArrangement:Arrangement.HorizontalOrVertical = CardStackDefaults.VerticalArrangement,
     horizontalAlignment:Alignment.Horizontal = CardStackDefaults.HorizontalAlignment,
     dragState: DragManager?=null,
+    isDragEnable:Boolean = true,
     content: @Composable (T) -> Unit
 ) {
     val config = LocalConfiguration.current
@@ -73,12 +74,14 @@ fun <T> CardStack(
                 .pointerInput(Unit) {
                     detectDragGestures(
                         onDragEnd = {
+                            if(isDragEnable.not()) return@detectDragGestures
                             dragManager.onDragEnd(
                                 index = dragManager.topDeckIndex.value,
                                 selectedIndex = dragManager.topDeckIndex.value
                             )
                         },
                         onDrag = { change, dragAmount ->
+                            if(isDragEnable.not()) return@detectDragGestures
                             change.consumePositionChange()
                             if (dragAmount.x > 0 || dragManager.topDeckIndex.value == 0) {
                                 dragManager.dragRight(
