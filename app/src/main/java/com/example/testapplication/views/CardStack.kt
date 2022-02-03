@@ -119,7 +119,8 @@ fun <T> LazyCardStack(
                                 Box(
                                     modifier = Modifier
                                         .fillMaxSize()
-
+                                        .alpha(alpha = swipeState.opacity.value)
+                                        .background(color = Color.White , shape = cornerShape)
                                 )
                             }
                         }
