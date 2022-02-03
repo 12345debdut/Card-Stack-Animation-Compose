@@ -1,5 +1,6 @@
 package com.example.testapplication.views
 
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
 import androidx.compose.foundation.gestures.*
 import androidx.compose.foundation.layout.*
@@ -9,6 +10,7 @@ import androidx.compose.material.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.*
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
@@ -18,7 +20,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
-
+import kotlinx.coroutines.CoroutineScope
 
 
 /**
@@ -37,31 +39,20 @@ import androidx.compose.ui.unit.Dp
  */
 @ExperimentalMaterialApi
 @Composable
-fun <T> CardStack(
+fun <T> LazyCardStack(
     modifier: Modifier = Modifier,
     items: MutableList<T>,
     maxElements: Int = 3,
     cornerShape: RoundedCornerShape = CardStackDefaults.CornerShape,
-    elevation:Dp = CardStackDefaults.Elevation,
-    verticalArrangement:Arrangement.HorizontalOrVertical = CardStackDefaults.VerticalArrangement,
-    horizontalAlignment:Alignment.Horizontal = CardStackDefaults.HorizontalAlignment,
+    elevation: Dp = CardStackDefaults.Elevation,
+    verticalArrangement: Arrangement.HorizontalOrVertical = CardStackDefaults.VerticalArrangement,
+    horizontalAlignment: Alignment.Horizontal = CardStackDefaults.HorizontalAlignment,
     dragState: DragManager?=null,
-    isDragEnable:Boolean = true,
+    isDragEnable: Boolean = true,
+    scope:CoroutineScope = rememberCoroutineScope(),
     content: @Composable (T) -> Unit
 ) {
-    val config = LocalConfiguration.current
-    val screenWidth = with(LocalDensity.current) {
-        config.screenWidthDp.dp.toPx()
-    }
-    val scope = rememberCoroutineScope()
-
-    val dragManager =
-        dragState?:rememberDragManager(
-            size = items.size,
-            screenWidth = screenWidth,
-            scope = scope,
-            maxElements = maxElements
-        )
+    val dragManager = dragState?:rememberDragManager(size = items.size, maxCards = maxElements, scope = scope)
     Column(
         modifier = modifier,
         verticalArrangement = verticalArrangement,
@@ -74,14 +65,14 @@ fun <T> CardStack(
                 .pointerInput(Unit) {
                     detectDragGestures(
                         onDragEnd = {
-                            if(isDragEnable.not()) return@detectDragGestures
+                            if (isDragEnable.not()) return@detectDragGestures
                             dragManager.onDragEnd(
                                 index = dragManager.topDeckIndex.value,
                                 selectedIndex = dragManager.topDeckIndex.value
                             )
                         },
                         onDrag = { change, dragAmount ->
-                            if(isDragEnable.not()) return@detectDragGestures
+                            if (isDragEnable.not()) return@detectDragGestures
                             change.consumePositionChange()
                             if (dragAmount.x > 0 || dragManager.topDeckIndex.value == 0) {
                                 dragManager.dragRight(
@@ -102,7 +93,7 @@ fun <T> CardStack(
                 dragManager.setBoxWidth(with(density) { maxWidth.value.dp.toPx() })
             })
             val visibleIndexRange =
-                (items.size-1 downTo (dragManager.topDeckIndex.value - maxElements).coerceAtLeast(0)).map { it }
+                (items.size - 1 downTo (dragManager.topDeckIndex.value - maxElements).coerceAtLeast(0)).map { it }
 
             items
                 .asReversed()
@@ -117,7 +108,9 @@ fun <T> CardStack(
                                         scaleY = swipeState.scale.value
                                         scaleX = swipeState.scale.value
                                         translationX = swipeState.offsetX.value
+                                        alpha = 1f - swipeState.opacity.value
                                     }
+                                    .clip(shape = cornerShape)
                                     .shadow(elevation = elevation, shape = cornerShape),
                             ) {
                                 Box(modifier = Modifier.fillMaxSize()) {
@@ -126,11 +119,7 @@ fun <T> CardStack(
                                 Box(
                                     modifier = Modifier
                                         .fillMaxSize()
-                                        .alpha(alpha = swipeState.opacity.value)
-                                        .background(
-                                            color = Color.White,
-                                            shape = cornerShape
-                                        )
+
                                 )
                             }
                         }

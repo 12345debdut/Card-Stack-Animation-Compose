@@ -1,6 +1,8 @@
 package com.example.testapplication.views
 
 import android.util.Log
+import androidx.compose.animation.core.AnimationSpec
+import androidx.compose.animation.core.spring
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.geometry.Offset
 import com.google.android.material.math.MathUtils
@@ -12,8 +14,14 @@ open class DragManager(
     val size: Int,
     private val screenWidth: Float,
     private val scope: CoroutineScope,
-    private val maxElements: Int
+    private val maxElements: Int,
+    private val animationSpec: AnimationSpec<Float> = spring()
 ) {
+    private enum class DragDirection {
+        LEFT,
+        RIGHT
+    }
+
     var listOfDragState: List<DragState> = listOf()
         private set
 
@@ -31,17 +39,18 @@ open class DragManager(
 
     private var currentlyDragging = -1
 
-    var topDeckIndex = mutableStateOf(size-1)
+    var topDeckIndex = mutableStateOf(size - 1)
 
-    private var selectedIndex = size-1
-        set(value){
-            val temp = value.coerceIn(-1,size-1)
+    private var selectedIndex = size - 1
+        set(value) {
+            val temp = value.coerceIn(-1, size - 1)
             topDeckIndex.value = temp
             dragIndex = temp
             field = temp
         }
 
     private var dragIndex = -1
+
 
     /**
      * When the object initialize the object
@@ -107,7 +116,14 @@ open class DragManager(
      */
     private fun initList() {
         listOfDragState =
-            List(size = size) { DragState(index = it, screenWidth = screenWidth, scope = scope) }
+            List(size = size) {
+                DragState(
+                    index = it,
+                    screenWidth = screenWidth,
+                    scope = scope,
+                    animationSpec = animationSpec
+                )
+            }
     }
 
     /**
@@ -117,24 +133,34 @@ open class DragManager(
      * @param dragIndex dragging index by the user
      * @param selectedIndex which one is currently top of the deck
      */
-    private fun performDrag(dragAmountX: Float, dragAmountY: Float, dragIndex: Int, selectedIndex: Int) = scope.launch {
+    private fun performDrag(
+        dragAmountX: Float,
+        dragAmountY: Float,
+        dragIndex: Int,
+        selectedIndex: Int,
+        dragDirection: DragDirection = DragDirection.LEFT
+    ) = scope.launch {
         if (dragIndex != selectedIndex) return@launch
-        if (dragAmountX > 0){
+        if (dragAmountX > 0) {
             return@launch
         }
-        Log.d("INDEX","DRAG INDEX: $dragIndex $dragAmountX")
+        Log.d("INDEX", "DRAG INDEX: $dragIndex $dragAmountX")
 
-        if(isAnimationRunning) return@launch
-        if(currentlyDragging != -1 && currentlyDragging != dragIndex) return@launch
+        if (isAnimationRunning) return@launch
+        if (currentlyDragging != -1 && currentlyDragging != dragIndex) return@launch
+        val dragFraction = abs(dragAmountX).div(screenWidth / 2).coerceIn(0f, 1f)
+        val dragFractionWRTScreen = abs(dragAmountX).div(screenWidth).coerceIn(0f, 1f)
         launch {
             //Only the top item should be removed from deck otherwise it will not respond
             val dragState = listOfDragState[dragIndex]
-            dragState.drag(dragAmountX = dragAmountX, dragAmountY = dragAmountY)
+            //Linear interpolating the card itself opacity
+            //if dragging the card towards left side then it will be fade out
+            val opacity = MathUtils.lerp(0f,1f,dragFractionWRTScreen)
+            dragState.snap(opacityP = opacity, offsetXP = dragAmountX)
         }
         for ((counter, i) in (dragIndex - 1 downTo (dragIndex - maxCards + 1).coerceAtLeast(0)).withIndex()) {
             val startIndex = counter + 1
             val endIndex = counter
-            val dragFraction = abs(dragAmountX).div(screenWidth / 2).coerceIn(0f, 1f)
             val scaleP =
                 MathUtils.lerp(
                     scale[startIndex],
@@ -167,7 +193,7 @@ open class DragManager(
     fun onDragEnd(index: Int, selectedIndex: Int) {
         if (index != selectedIndex) return
         val swipeState = listOfDragState[index]
-        Log.d("INDEX","SWIPE: $dragIndex")
+        Log.d("INDEX", "SWIPE: $dragIndex")
 
         when {
             swipeState.offsetX.targetValue >= 0 -> {
@@ -176,11 +202,11 @@ open class DragManager(
                     isAnimationRunning = true
                     val prevState = listOfDragState[prevIndex]
                     prevState
-                        .positionToCenter{
+                        .positionToCenter {
                             returnToEquilibrium(index = prevIndex)
                         }.invokeOnCompletion {
                             isAnimationRunning = false
-                            this.selectedIndex -=-1
+                            this.selectedIndex -= -1
                         }
                 }
             }
@@ -193,7 +219,7 @@ open class DragManager(
                         isAnimationRunning = false
                     }
             }
-            abs(swipeState.offsetX.targetValue) > 0 && abs(swipeState.offsetX.targetValue) > boxWidth/2 -> {
+            abs(swipeState.offsetX.targetValue) > 0 && abs(swipeState.offsetX.targetValue) > boxWidth / 2 -> {
                 animateOutsideOfScreen(index = index).invokeOnCompletion {
                     this.selectedIndex -= 1
                 }
@@ -206,6 +232,10 @@ open class DragManager(
      * @param index Index of currently swiped card
      */
     private suspend fun returnToEquilibrium(index: Int) = scope.launch {
+        launch {
+            val dragState = listOfDragState[index]
+            dragState.animateTo(opacityP = 0f)
+        }
         for ((counter, i) in (index - 1 downTo (index - maxCards + 1).coerceAtLeast(0)).withIndex()) {
             listOfDragState[i].animateTo(
                 scaleP = scale[counter + 1],
@@ -221,11 +251,11 @@ open class DragManager(
      */
     fun dragRight(dragAmount: Offset) = scope.launch {
         if (dragAmount.x < 0) return@launch
-        Log.d("DRAG RIGHT","DRAG RIGHT: $selectedIndex")
+        Log.d("DRAG RIGHT", "DRAG RIGHT: $selectedIndex")
         val prevItemIndex = (selectedIndex + 1).coerceAtMost(size - 1)
         if (prevItemIndex == selectedIndex + 1) {
             dragIndex = prevItemIndex
-            Log.d("DRAG RIGHT","DRAG RIGHT: here $selectedIndex")
+            Log.d("DRAG RIGHT", "DRAG RIGHT: here $selectedIndex")
             val item = listOfDragState[prevItemIndex]
             val itemOffset = Offset(x = item.offsetX.value, y = item.offsetY.value)
             val summed = itemOffset + dragAmount
@@ -233,7 +263,8 @@ open class DragManager(
                 dragAmountX = summed.x,
                 dragAmountY = 0f,
                 dragIndex = prevItemIndex,
-                selectedIndex = prevItemIndex
+                selectedIndex = prevItemIndex,
+                dragDirection = DragDirection.RIGHT
             )
         }
     }
@@ -242,13 +273,18 @@ open class DragManager(
      * It's the drag right gesture whenever user drags it left of the screen so that the last removed card should appear into the deck again
      * @param dragAmount Drag offset so that it will do the interpolation
      */
-    fun dragLeft(dragAmount: Offset) = scope.launch{
-        if(dragAmount.x > 0) return@launch
-        if(dragIndex != selectedIndex && dragIndex != -1) return@launch
+    fun dragLeft(dragAmount: Offset) = scope.launch {
+        if (dragAmount.x > 0) return@launch
+        if (dragIndex != selectedIndex && dragIndex != -1) return@launch
         val item = listOfDragState[selectedIndex]
         val itemOffset = Offset(x = item.offsetX.value, y = item.offsetY.value)
         val summed = itemOffset + dragAmount
-        performDrag(dragIndex = selectedIndex, dragAmountY = summed.y, dragAmountX = summed.x, selectedIndex = selectedIndex)
+        performDrag(
+            dragIndex = selectedIndex,
+            dragAmountY = summed.y,
+            dragAmountX = summed.x,
+            selectedIndex = selectedIndex
+        )
     }
 
     /**
@@ -257,7 +293,7 @@ open class DragManager(
     fun swipeLeft() = scope.launch {
         animateOutsideOfScreen(index = selectedIndex)
             .invokeOnCompletion {
-                selectedIndex-=1
+                selectedIndex -= 1
             }
     }
 
@@ -265,29 +301,37 @@ open class DragManager(
      * It will just help to swipe back to the deck
      */
     suspend fun swipeBack() = scope.launch {
-        for ((counter, i) in (selectedIndex downTo (selectedIndex - maxCards + 1).coerceAtLeast(0)).withIndex()){
-            val state = listOfDragState[i]
-            state.animateTo(
-                scaleP = scale[counter],
-                opacityP = opacity[counter],
-                offsetXP = offsetX[counter]
-            )
+        for ((counter, i) in (selectedIndex + 1 downTo (selectedIndex - maxCards + 1).coerceAtLeast(
+            0
+        )).withIndex()) {
+            if (counter < maxCards && i < size) {
+                val state = listOfDragState[i]
+                state.animateTo(
+                    scaleP = scale[counter],
+                    opacityP = opacity[counter],
+                    offsetXP = offsetX[counter]
+                )
+            }
         }
     }.invokeOnCompletion {
-        selectedIndex-=-1
+        selectedIndex -= -1
     }
 
     /**
      * It will animate outside of screen with the particular index
      * @param index Index of the current swiped card
      */
-    private fun animateOutsideOfScreen(index: Int) = scope.launch{
+    private fun animateOutsideOfScreen(index: Int) = scope.launch {
         val state = listOfDragState[index]
         state.animateOutsideOfScreen()
         isAnimationRunning = true
-        for ((counter, i) in (index - 1 downTo (index - maxCards + 1).coerceAtLeast(0)).withIndex()){
+        for ((counter, i) in (index - 1 downTo (index - maxCards + 1).coerceAtLeast(0)).withIndex()) {
             launch {
-                listOfDragState[i].animateTo(scaleP = scale[counter], opacityP = opacity[counter], offsetXP = offsetX[counter]){
+                listOfDragState[i].animateTo(
+                    scaleP = scale[counter],
+                    opacityP = opacity[counter],
+                    offsetXP = offsetX[counter]
+                ) {
                     if (index - maxCards >= 0) {
                         val lastElement = listOfDragState[index - maxCards]
                         lastElement.animateTo(

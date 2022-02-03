@@ -6,7 +6,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.unit.dp
 
 const val CARD_STACK_SCALE_FACTOR = 0.15f
-const val CARD_STACK_OPACITY_GAP = 0.4f
+const val CARD_STACK_OPACITY_GAP = 0.15f
 
 object CardStackDefaults {
     val CornerShape = RoundedCornerShape(percent = 10)

@@ -12,6 +12,7 @@ import android.view.ViewGroup
 import android.view.ViewParent
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.Orientation
@@ -24,7 +25,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
@@ -39,10 +39,13 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import androidx.viewpager2.widget.ViewPager2
-import com.example.testapplication.views.CardStack
+import com.example.testapplication.views.LazyCardStack
+import com.example.testapplication.views.LazyStackIndicator
 import com.example.testapplication.views.rememberDragManager
 import com.google.accompanist.flowlayout.FlowRow
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.map
 import kotlin.math.roundToInt
 
 
@@ -56,11 +59,11 @@ class FirstFragement : Fragment() {
         val view = inflater.inflate(R.layout.fragment_first_fragement, container, false)
 
         val listOfViewModel = listOf(
-            ViewModel(align = CardAlign.RIGHT,color = Color.Red),
-            ViewModel(align = CardAlign.LEFT,color = Color.Blue),
-            ViewModel(align = CardAlign.RIGHT,color = Color.Green),
-            ViewModel(align = CardAlign.LEFT,color = Color.Gray),
-            ViewModel(align = CardAlign.CENTRE,color = Color.Red)
+            ViewModel(align = CardAlign.RIGHT, color = Color.Red),
+            ViewModel(align = CardAlign.LEFT, color = Color.Blue),
+            ViewModel(align = CardAlign.RIGHT, color = Color.Green),
+            ViewModel(align = CardAlign.LEFT, color = Color.Gray),
+            ViewModel(align = CardAlign.CENTRE, color = Color.Red)
         )
 
 
@@ -72,28 +75,46 @@ class FirstFragement : Fragment() {
         super.onViewCreated(view, savedInstanceState)
         val composeView = view.findViewById<ComposeView>(R.id.compose_view)
         composeView.setContent {
-            val list = mutableListOf(R.drawable.image1,R.drawable.image2,R.drawable.image3,R.drawable.image4,R.drawable.images5)
-            val config = LocalConfiguration.current
-            val screenWidth = with(LocalDensity.current) {
-                config.screenWidthDp.dp.toPx()
-            }
-            val manager = rememberDragManager(size = list.size, screenWidth = screenWidth, scope = rememberCoroutineScope(), maxElements = 3)
-            LaunchedEffect(key1 = Unit, block = {
-                for(i in 0 until list.size-1){
-                    delay(2000)
-                    manager.swipeLeft()
-                }
-                for(i in 0 until list.size){
-                    delay(2000)
-                    manager.swipeBack()
-                }
-            })
+            val list = mutableListOf(
+                R.drawable.image1,
+                R.drawable.image2,
+                R.drawable.image3,
+                R.drawable.image4,
+                R.drawable.images5
+            )
+            val scope = rememberCoroutineScope()
+            val dragState = rememberDragManager(
+                animationSpec = tween(durationMillis = 500),
+                size = list.size,
+                maxCards = 3,
+                scope = scope
+            )
+//            LaunchedEffect(Unit) {
+//                var swipingLeft = true
+//                snapshotFlow{
+//                    dragState.topDeckIndex.value
+//                }.map {
+//                    delay(2000)
+//                    if(it == 0){
+//                        swipingLeft = false
+//                    }else if(it == list.size-1){
+//                        swipingLeft = true
+//                    }
+//                    it
+//                }.collect {
+//                    if(swipingLeft) {
+//                        dragState.swipeLeft()
+//                    }else{
+//                        dragState.swipeBack()
+//                    }
+//                }
+//            }
             Column(
                 modifier = Modifier.fillMaxSize(),
                 verticalArrangement = Arrangement.Bottom,
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                CardStack(
+                LazyCardStack(
                     items = list,
                     maxElements = 3,
                     content = {
@@ -108,21 +129,25 @@ class FirstFragement : Fragment() {
                     },
                     modifier = Modifier
                         .fillMaxSize(fraction = 0.9f),
-                    dragState = manager
+                    dragState = dragState
+                )
+                LazyStackIndicator(
+                    dragState = dragState,
+                    count = list.size
                 )
             }
         }
     }
-    
-    private fun listOf(count:Int):MutableList<String>{
+
+    private fun listOf(count: Int): MutableList<String> {
         val mutableList = mutableListOf<String>()
-        for(i in 0 until count) mutableList.add("SOME $i")
+        for (i in 0 until count) mutableList.add("SOME $i")
         return mutableList
     }
 
-    private fun findViewPager(view:ListComposeView):ViewPager2? {
+    private fun findViewPager(view: ListComposeView): ViewPager2? {
         var rootView: ViewParent? = view
-        var viewPager:ViewPager2? = null
+        var viewPager: ViewPager2? = null
         while (rootView != null && (rootView is ViewPager2).not()) {
             rootView = rootView.parent
 
@@ -134,33 +159,37 @@ class FirstFragement : Fragment() {
     }
 }
 
-enum class CardAlign{
+enum class CardAlign {
     LEFT,
     RIGHT,
     CENTRE
 }
 
-data class ViewModel(val align: CardAlign,val color: Color)
+data class ViewModel(val align: CardAlign, val color: Color)
 
 @Composable
-fun AdaptiveRow(listOfModel:List<ViewModel>){
+fun AdaptiveRow(listOfModel: List<ViewModel>) {
     val spanCount = 2
     val totalSize = listOfModel.size
     val fraction = 1f.div(spanCount)
     //Span count closest multiple should be my threshold value for choosing whether it will be in the same line or in a orphan state
-    val orphanThreshold = totalSize.coerceAtMost(maximumValue = totalSize.div(spanCount)*spanCount)
+    val orphanThreshold =
+        totalSize.coerceAtMost(maximumValue = totalSize.div(spanCount) * spanCount)
     val orphanFraction = 1f.div(totalSize - orphanThreshold)
     val leftSide = 0 until spanCount.div(2) //
-    val rightSide = if(spanCount%2 == 0) spanCount.div(2) until spanCount else spanCount.div(2)+1 until spanCount
-    val center = if(spanCount%2 == 0) -1 else spanCount.div(2)
-    FlowRow(modifier = Modifier
-        .fillMaxWidth()
-        .wrapContentHeight()){
+    val rightSide =
+        if (spanCount % 2 == 0) spanCount.div(2) until spanCount else spanCount.div(2) + 1 until spanCount
+    val center = if (spanCount % 2 == 0) -1 else spanCount.div(2)
+    FlowRow(
+        modifier = Modifier
+            .fillMaxWidth()
+            .wrapContentHeight()
+    ) {
         listOfModel.forEachIndexed { index, viewModel ->
             //It will determine the relative value of the index wrt a specific row
-            val indexInRange = index%spanCount
+            val indexInRange = index % spanCount
             CardImage(
-                modifier = Modifier.fillMaxWidth(fraction = if(index < orphanThreshold) fraction else orphanFraction),
+                modifier = Modifier.fillMaxWidth(fraction = if (index < orphanThreshold) fraction else orphanFraction),
                 color = viewModel.color,
                 align = when {
                     index >= orphanThreshold && orphanFraction == 1f -> CardAlign.CENTRE
@@ -175,29 +204,28 @@ fun AdaptiveRow(listOfModel:List<ViewModel>){
 }
 
 @Composable
-fun CardImage(modifier:Modifier,color: Color,align: CardAlign = CardAlign.CENTRE){
-    Row(modifier = modifier
-        .padding(5.dp),
-        horizontalArrangement = when(align){
+fun CardImage(modifier: Modifier, color: Color, align: CardAlign = CardAlign.CENTRE) {
+    Row(
+        modifier = modifier
+            .padding(5.dp),
+        horizontalArrangement = when (align) {
             CardAlign.CENTRE -> Arrangement.Center
             CardAlign.LEFT -> Arrangement.Start
             CardAlign.RIGHT -> Arrangement.End
         }
-    ){
-        Box(modifier = Modifier
-            .background(color = color)
-            .size(100.dp))
+    ) {
+        Box(
+            modifier = Modifier
+                .background(color = color)
+                .size(100.dp)
+        )
     }
 }
 
 
-
-
-fun Float.roundTo(n : Int) : Float {
+fun Float.roundTo(n: Int): Float {
     return "%.${n}f".format(this).toFloat()
 }
-
-
 
 
 enum class States {
@@ -206,28 +234,31 @@ enum class States {
 }
 
 @Composable
-fun rememberTimeOut() = remember{
+fun rememberTimeOut() = remember {
     val isShowing = mutableStateOf(true)
     Handler(Looper.getMainLooper()).postDelayed({
         isShowing.value = false
-    },3000)
+    }, 3000)
     isShowing
 }
 
 @ExperimentalMaterialApi
 @Composable
-fun BottomSheet(modifier: Modifier = Modifier){
-    val swipeableState = rememberSwipeableState(initialValue = States.EXPANDED, animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy))
+fun BottomSheet(modifier: Modifier = Modifier) {
+    val swipeableState = rememberSwipeableState(
+        initialValue = States.EXPANDED,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy)
+    )
     val lazyListState = rememberLazyListState()
 
-    BoxWithConstraints(modifier = modifier){
+    BoxWithConstraints(modifier = modifier) {
         val constraintsScope = this
         val maxHeight = with(LocalDensity.current) {
             constraintsScope.maxHeight.toPx()
         }
-        val nestedScrollConnection = object : NestedScrollConnection{
+        val nestedScrollConnection = object : NestedScrollConnection {
             override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
-                Log.d("AVAILABLE","$available")
+                Log.d("AVAILABLE", "$available")
                 val delta = available.y
                 return if (delta < 0) {
                     val value = swipeableState.performDrag(delta).toOffset()
@@ -237,13 +268,14 @@ fun BottomSheet(modifier: Modifier = Modifier){
                     Offset.Zero
                 }
             }
+
             override fun onPostScroll(
                 consumed: Offset,
                 available: Offset,
                 source: NestedScrollSource
             ): Offset {
                 val delta = available.y
-                Log.d("AVAILABLE CONSUMED","${available.y} - ${consumed.y}")
+                Log.d("AVAILABLE CONSUMED", "${available.y} - ${consumed.y}")
                 return swipeableState.performDrag(delta).toOffset()
             }
 
@@ -260,7 +292,7 @@ fun BottomSheet(modifier: Modifier = Modifier){
                 consumed: Velocity,
                 available: Velocity
             ): Velocity {
-                Log.d("VELOCITY","available - ${available.y} consumed - ${consumed.y}")
+                Log.d("VELOCITY", "available - ${available.y} consumed - ${consumed.y}")
                 swipeableState.performFling(velocity = available.y)
                 return super.onPostFling(consumed, available)
             }
@@ -285,10 +317,10 @@ fun BottomSheet(modifier: Modifier = Modifier){
                 }
                 .nestedScroll(nestedScrollConnection)
                 .background(color = Color.Red)
-        ){
+        ) {
 
-            LazyColumn(state = lazyListState){
-                items(count = 100){index ->
+            LazyColumn(state = lazyListState) {
+                items(count = 100) { index ->
                     Text(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -301,6 +333,6 @@ fun BottomSheet(modifier: Modifier = Modifier){
     }
 }
 
-fun Float.toOffset():Offset{
-    return Offset(x = 0f,y = this)
+fun Float.toOffset(): Offset {
+    return Offset(x = 0f, y = this)
 }
