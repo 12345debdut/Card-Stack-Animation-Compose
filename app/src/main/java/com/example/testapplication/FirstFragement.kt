@@ -75,12 +75,8 @@ class FirstFragement : Fragment() {
         super.onViewCreated(view, savedInstanceState)
         val composeView = view.findViewById<ComposeView>(R.id.compose_view)
         composeView.setContent {
-            val list = mutableListOf(
-                R.drawable.image1,
-                R.drawable.image2,
-                R.drawable.image3,
-                R.drawable.image4,
-                R.drawable.images5
+            val list = mutableListOf<Int>(
+
             )
             val scope = rememberCoroutineScope()
             val dragState = rememberDragManager(
@@ -89,26 +85,26 @@ class FirstFragement : Fragment() {
                 maxCards = 3,
                 scope = scope
             )
-//            LaunchedEffect(Unit) {
-//                var swipingLeft = true
-//                snapshotFlow{
-//                    dragState.topDeckIndex.value
-//                }.map {
-//                    delay(2000)
-//                    if(it == 0){
-//                        swipingLeft = false
-//                    }else if(it == list.size-1){
-//                        swipingLeft = true
-//                    }
-//                    it
-//                }.collect {
-//                    if(swipingLeft) {
-//                        dragState.swipeLeft()
-//                    }else{
-//                        dragState.swipeBack()
-//                    }
-//                }
-//            }
+            LaunchedEffect(Unit) {
+                var swipingLeft = true
+                snapshotFlow{
+                    dragState.topDeckIndex.value
+                }.map {
+                    delay(2000)
+                    if(it == 0){
+                        swipingLeft = false
+                    }else if(it == list.size-1){
+                        swipingLeft = true
+                    }
+                    it
+                }.collect {
+                    if(swipingLeft) {
+                        dragState.swipeLeft()
+                    }else{
+                        dragState.swipeBack()
+                    }
+                }
+            }
             Column(
                 modifier = Modifier.fillMaxSize(),
                 verticalArrangement = Arrangement.Bottom,

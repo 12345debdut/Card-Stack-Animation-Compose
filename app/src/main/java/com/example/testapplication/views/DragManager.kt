@@ -192,6 +192,7 @@ open class DragManager(
      */
     fun onDragEnd(index: Int, selectedIndex: Int) {
         if (index != selectedIndex) return
+        if((selectedIndex in listOfDragState.indices).not()) return
         val swipeState = listOfDragState[index]
         Log.d("INDEX", "SWIPE: $dragIndex")
 
@@ -251,7 +252,7 @@ open class DragManager(
      */
     fun dragRight(dragAmount: Offset) = scope.launch {
         if (dragAmount.x < 0) return@launch
-        Log.d("DRAG RIGHT", "DRAG RIGHT: $selectedIndex")
+        if((selectedIndex in listOfDragState.indices).not()) return@launch
         val prevItemIndex = (selectedIndex + 1).coerceAtMost(size - 1)
         if (prevItemIndex == selectedIndex + 1) {
             dragIndex = prevItemIndex
@@ -275,6 +276,7 @@ open class DragManager(
      */
     fun dragLeft(dragAmount: Offset) = scope.launch {
         if (dragAmount.x > 0) return@launch
+        if((selectedIndex in listOfDragState.indices).not()) return@launch
         if (dragIndex != selectedIndex && dragIndex != -1) return@launch
         val item = listOfDragState[selectedIndex]
         val itemOffset = Offset(x = item.offsetX.value, y = item.offsetY.value)
@@ -291,6 +293,7 @@ open class DragManager(
      * It will give you the power to swiping left without interacting to the cards
      */
     fun swipeLeft() = scope.launch {
+        if((selectedIndex in listOfDragState.indices).not()) return@launch
         animateOutsideOfScreen(index = selectedIndex)
             .invokeOnCompletion {
                 selectedIndex -= 1
@@ -301,6 +304,7 @@ open class DragManager(
      * It will just help to swipe back to the deck
      */
     suspend fun swipeBack() = scope.launch {
+        if((selectedIndex in listOfDragState.indices).not()) return@launch
         for ((counter, i) in (selectedIndex + 1 downTo (selectedIndex - maxCards + 1).coerceAtLeast(
             0
         )).withIndex()) {
