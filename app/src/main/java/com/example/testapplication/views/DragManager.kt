@@ -194,7 +194,6 @@ open class DragManager(
         if (index != selectedIndex) return
         if((selectedIndex in listOfDragState.indices).not()) return
         val swipeState = listOfDragState[index]
-        Log.d("INDEX", "SWIPE: $dragIndex")
 
         when {
             swipeState.offsetX.targetValue >= 0 -> {
